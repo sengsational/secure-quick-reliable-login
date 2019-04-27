@@ -21,6 +21,7 @@ import com.google.zxing.integration.android.IntentResult;
 
 import org.ea.sqrl.R;
 import org.ea.sqrl.activites.base.LoginBaseActivity;
+import org.ea.sqrl.activites.ocr.OcrCaptureActivity;
 import org.ea.sqrl.processors.BioAuthenticationCallback;
 import org.ea.sqrl.processors.CommunicationFlowHandler;
 import org.ea.sqrl.processors.CommunicationHandler;
@@ -31,6 +32,10 @@ import java.security.KeyStore;
 import java.util.regex.Matcher;
 
 import javax.crypto.Cipher;
+
+import static org.ea.sqrl.activites.ocr.OcrCaptureActivity.OCR_DOMAIN_RESULT;
+import static org.ea.sqrl.activites.ocr.OcrCaptureActivity.OCR_REQUEST;
+import static org.ea.sqrl.activites.ocr.OcrCaptureActivity.QR_CODE_DOMAIN_PASSTHROUGH;
 
 /**
  *
@@ -99,6 +104,7 @@ public class SimplifiedActivity extends LoginBaseActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        boolean testDomainScanning = true;
         IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
         if(result != null) {
             if(result.getContents() == null) {
@@ -108,6 +114,7 @@ public class SimplifiedActivity extends LoginBaseActivity {
                     startActivity(new Intent(this, StartActivity.class));
                 }
             } else {
+                Log.d("MainActivity", "Pulling QR code as a string");
                 final String serverData = Utils.readSQRLQRCodeAsString(data);
                 communicationFlowHandler.setServerData(serverData);
                 communicationFlowHandler.setUseSSL(serverData.startsWith("sqrl://"));
@@ -130,74 +137,173 @@ public class SimplifiedActivity extends LoginBaseActivity {
                     return;
                 }
 
-                handler.postDelayed(() -> {
-                    final TextView txtSite = loginPopupWindow.getContentView().findViewById(R.id.txtSite);
-                    txtSite.setText(domain);
+                /**************************************/
+                if (testDomainScanning) {
 
-                    SQRLStorage storage = SQRLStorage.getInstance(SimplifiedActivity.this.getApplicationContext());
-                    final TextView txtLoginPassword = loginPopupWindow.getContentView().findViewById(R.id.txtLoginPassword);
-                    if(storage.hasQuickPass()) {
-                        txtLoginPassword.setHint(getString(R.string.login_identity_quickpass, "" + storage.getHintLength()));
-                    } else {
-                        txtLoginPassword.setHint(R.string.login_identity_password);
-                    }
+                    Intent ocrIntent = new Intent(this, OcrCaptureActivity.class);
+                    ocrIntent.putExtra("flavor", "firefox");
+                    ocrIntent.putExtra(QR_CODE_DOMAIN_PASSTHROUGH, domain);
+                    startActivityForResult(ocrIntent, OCR_REQUEST);
+                /**************************************/
 
-                    showLoginPopup();
+                } else {
+                    handler.postDelayed(() -> {
+                        final TextView txtSite = loginPopupWindow.getContentView().findViewById(R.id.txtSite);
+                        txtSite.setText(domain);
 
-                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && storage.hasBiometric()) {
+                        SQRLStorage storage = SQRLStorage.getInstance(SimplifiedActivity.this.getApplicationContext());
+                        final TextView txtLoginPassword = loginPopupWindow.getContentView().findViewById(R.id.txtLoginPassword);
+                        if (storage.hasQuickPass()) {
+                            txtLoginPassword.setHint(getString(R.string.login_identity_quickpass, "" + storage.getHintLength()));
+                        } else {
+                            txtLoginPassword.setHint(R.string.login_identity_password);
+                        }
 
-                        BioAuthenticationCallback biometricCallback =
-                                new BioAuthenticationCallback(SimplifiedActivity.this.getApplicationContext(), () -> {
-                                    handler.post(() -> {
-                                        hideLoginPopup();
-                                        showProgressPopup();
-                                    });
-                                    communicationFlowHandler.addAction(CommunicationFlowHandler.Action.QUERY_WITHOUT_SUK_QRCODE);
-                                    communicationFlowHandler.addAction(CommunicationFlowHandler.Action.LOGIN);
+                        showLoginPopup();
 
-                                    communicationFlowHandler.setDoneAction(() -> {
-                                        storage.clear();
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && storage.hasBiometric()) {
+
+                            BioAuthenticationCallback biometricCallback =
+                                    new BioAuthenticationCallback(SimplifiedActivity.this.getApplicationContext(), () -> {
                                         handler.post(() -> {
-                                            hideProgressPopup();
-                                            closeActivity();
+                                            hideLoginPopup();
+                                            showProgressPopup();
                                         });
+                                        communicationFlowHandler.addAction(CommunicationFlowHandler.Action.QUERY_WITHOUT_SUK_QRCODE);
+                                        communicationFlowHandler.addAction(CommunicationFlowHandler.Action.LOGIN);
+
+                                        communicationFlowHandler.setDoneAction(() -> {
+                                            storage.clear();
+                                            handler.post(() -> {
+                                                hideProgressPopup();
+                                                closeActivity();
+                                            });
+                                        });
+
+                                        communicationFlowHandler.setErrorAction(() -> {
+                                            storage.clear();
+                                            handler.post(() -> hideProgressPopup());
+                                        });
+
+                                        communicationFlowHandler.handleNextAction();
                                     });
 
-                                    communicationFlowHandler.setErrorAction(() -> {
-                                        storage.clear();
-                                        handler.post(() -> hideProgressPopup());
-                                    });
+                            BiometricPrompt bioPrompt = new BiometricPrompt.Builder(this)
+                                    .setTitle(getString(R.string.login_title))
+                                    .setSubtitle(domain)
+                                    .setDescription(getString(R.string.login_verify_domain_text))
+                                    .setNegativeButton(
+                                            getString(R.string.button_cps_cancel),
+                                            this.getMainExecutor(),
+                                            (dialogInterface, i) -> {
+                                            }
+                                    ).build();
 
-                                    communicationFlowHandler.handleNextAction();
+                            CancellationSignal cancelSign = new CancellationSignal();
+                            cancelSign.setOnCancelListener(() -> {
+                            });
+
+                            try {
+                                KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+                                keyStore.load(null);
+                                KeyStore.Entry entry = keyStore.getEntry("quickPass", null);
+                                Cipher decCipher = Cipher.getInstance("RSA/ECB/PKCS1PADDING"); //or try with "RSA"
+                                decCipher.init(Cipher.DECRYPT_MODE, ((KeyStore.PrivateKeyEntry) entry).getPrivateKey());
+                                bioPrompt.authenticate(new BiometricPrompt.CryptoObject(decCipher), cancelSign, this.getMainExecutor(), biometricCallback);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+
+                    }, 100);
+                }
+            }
+        } else if (requestCode == OcrCaptureActivity.OCR_REQUEST) {
+            String domain = data.getStringExtra(QR_CODE_DOMAIN_PASSTHROUGH);
+            if (resultCode == RESULT_OK) {
+                Log.v(TAG, "Scan Url Result OK: " + resultCode);
+                String domainFromAddressBar = data.getStringExtra(OCR_DOMAIN_RESULT);
+                Log.v(TAG, "The result was: " + domainFromAddressBar);
+                if (domainFromAddressBar == null) {
+                    Log.v(TAG, "The user pressed the back button before the URL could be established.");
+                } else {
+                    Log.v(TAG, domain.equals(domainFromAddressBar)?"MATCHING DOMAINS!!":">>>>>>>>>>>>>>NON_MATCHING DOMAINS<<<<<<<<<<<<");
+                    Log.v(TAG, "[" + domain + "] ?????? [" + domainFromAddressBar + "]");
+                    Log.v(TAG, "Here is where we would do something different if the domains were not matching.");
+                }
+            } else {
+                Log.v(TAG, "Scan Url Result Not Ok: " + resultCode);
+            }
+
+            handler.postDelayed(() -> {
+                final TextView txtSite = loginPopupWindow.getContentView().findViewById(R.id.txtSite);
+                txtSite.setText(domain);
+
+                SQRLStorage storage = SQRLStorage.getInstance(SimplifiedActivity.this.getApplicationContext());
+                final TextView txtLoginPassword = loginPopupWindow.getContentView().findViewById(R.id.txtLoginPassword);
+                if (storage.hasQuickPass()) {
+                    txtLoginPassword.setHint(getString(R.string.login_identity_quickpass, "" + storage.getHintLength()));
+                } else {
+                    txtLoginPassword.setHint(R.string.login_identity_password);
+                }
+
+                showLoginPopup();
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && storage.hasBiometric()) {
+
+                    BioAuthenticationCallback biometricCallback =
+                            new BioAuthenticationCallback(SimplifiedActivity.this.getApplicationContext(), () -> {
+                                handler.post(() -> {
+                                    hideLoginPopup();
+                                    showProgressPopup();
+                                });
+                                communicationFlowHandler.addAction(CommunicationFlowHandler.Action.QUERY_WITHOUT_SUK_QRCODE);
+                                communicationFlowHandler.addAction(CommunicationFlowHandler.Action.LOGIN);
+
+                                communicationFlowHandler.setDoneAction(() -> {
+                                    storage.clear();
+                                    handler.post(() -> {
+                                        hideProgressPopup();
+                                        closeActivity();
+                                    });
                                 });
 
-                        BiometricPrompt bioPrompt = new BiometricPrompt.Builder(this)
-                                .setTitle(getString(R.string.login_title))
-                                .setSubtitle(domain)
-                                .setDescription(getString(R.string.login_verify_domain_text))
-                                .setNegativeButton(
+                                communicationFlowHandler.setErrorAction(() -> {
+                                    storage.clear();
+                                    handler.post(() -> hideProgressPopup());
+                                });
+
+                                communicationFlowHandler.handleNextAction();
+                            });
+
+                    BiometricPrompt bioPrompt = new BiometricPrompt.Builder(this)
+                            .setTitle(getString(R.string.login_title))
+                            .setSubtitle(domain)
+                            .setDescription(getString(R.string.login_verify_domain_text))
+                            .setNegativeButton(
                                     getString(R.string.button_cps_cancel),
                                     this.getMainExecutor(),
-                                    (dialogInterface, i) -> {}
-                                ).build();
+                                    (dialogInterface, i) -> {
+                                    }
+                            ).build();
 
-                        CancellationSignal cancelSign = new CancellationSignal();
-                        cancelSign.setOnCancelListener(() -> {});
+                    CancellationSignal cancelSign = new CancellationSignal();
+                    cancelSign.setOnCancelListener(() -> {
+                    });
 
-                        try {
-                            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
-                            keyStore.load(null);
-                            KeyStore.Entry entry = keyStore.getEntry("quickPass", null);
-                            Cipher decCipher = Cipher.getInstance("RSA/ECB/PKCS1PADDING"); //or try with "RSA"
-                            decCipher.init(Cipher.DECRYPT_MODE, ((KeyStore.PrivateKeyEntry) entry).getPrivateKey());
-                            bioPrompt.authenticate(new BiometricPrompt.CryptoObject(decCipher), cancelSign, this.getMainExecutor(), biometricCallback);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+                    try {
+                        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+                        keyStore.load(null);
+                        KeyStore.Entry entry = keyStore.getEntry("quickPass", null);
+                        Cipher decCipher = Cipher.getInstance("RSA/ECB/PKCS1PADDING"); //or try with "RSA"
+                        decCipher.init(Cipher.DECRYPT_MODE, ((KeyStore.PrivateKeyEntry) entry).getPrivateKey());
+                        bioPrompt.authenticate(new BiometricPrompt.CryptoObject(decCipher), cancelSign, this.getMainExecutor(), biometricCallback);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
+                }
 
-                }, 100);
-            }
+            }, 100);
         }
     }
 
