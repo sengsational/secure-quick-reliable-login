@@ -1,6 +1,11 @@
 package org.ea.sqrl.utils;
 
 import android.app.Activity;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.app.job.JobInfo;
+import android.app.job.JobScheduler;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -14,6 +19,8 @@ import com.google.zxing.FormatException;
 
 import org.ea.sqrl.database.IdentityDBHelper;
 import org.ea.sqrl.processors.SQRLStorage;
+import org.ea.sqrl.services.ClearIdentityReceiver;
+import org.ea.sqrl.services.ClearIdentityService;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -127,6 +134,36 @@ public class Utils {
         } catch (IOException e) {
             e.printStackTrace();
             return null;
+        }
+    }
+
+    public static void clearQuickPassDelayed(Context context) {
+        long delayMillis = SQRLStorage.getInstance(context.getApplicationContext()).getIdleTimeout() * 60000;
+
+        SqrlApplication.setApplicationShortcuts(context.getApplicationContext());
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            JobInfo jobInfo = new JobInfo.Builder(ClearIdentityService.JOB_NUMBER, new ComponentName(context, ClearIdentityService.class))
+                    .setMinimumLatency(delayMillis).build();
+
+            JobScheduler jobScheduler = (JobScheduler) context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
+            if(jobScheduler != null) jobScheduler.schedule(jobInfo);
+        } else {
+            AlarmManager alarmManager = (AlarmManager)context.getSystemService(Context.ALARM_SERVICE);
+
+            Intent intent = new Intent(context.getApplicationContext(), ClearIdentityReceiver.class);
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(context.getApplicationContext(), 0, intent, 0);
+
+            int SDK_INT = Build.VERSION.SDK_INT;
+            long timeInMillis = System.currentTimeMillis() + delayMillis;
+
+            if(alarmManager == null) return;
+
+            if (SDK_INT < Build.VERSION_CODES.KITKAT) {
+                alarmManager.set(AlarmManager.RTC_WAKEUP, timeInMillis, pendingIntent);
+            } else if (SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                alarmManager.setExact(AlarmManager.RTC_WAKEUP, timeInMillis, pendingIntent);
+            }
         }
     }
 }

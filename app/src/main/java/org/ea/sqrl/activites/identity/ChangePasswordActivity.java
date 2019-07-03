@@ -1,7 +1,5 @@
 package org.ea.sqrl.activites.identity;
 
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.ViewGroup;
 import android.widget.EditText;
@@ -11,6 +9,7 @@ import org.ea.sqrl.activites.base.BaseActivity;
 import org.ea.sqrl.processors.SQRLStorage;
 import org.ea.sqrl.utils.PasswordStrengthMeter;
 import org.ea.sqrl.utils.SqrlApplication;
+import org.ea.sqrl.utils.Utils;
 
 public class ChangePasswordActivity extends BaseActivity {
 
@@ -59,7 +58,7 @@ public class ChangePasswordActivity extends BaseActivity {
 
                     return;
                 }
-                clearQuickPassDelayed();
+                Utils.clearQuickPassDelayed(ChangePasswordActivity.this);
 
                 boolean encryptStatus = storage.encryptIdentityKey(txtNewPassword.getText().toString(), entropyHarvester);
                 if (!encryptStatus) {

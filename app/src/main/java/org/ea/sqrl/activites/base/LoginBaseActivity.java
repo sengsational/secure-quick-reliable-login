@@ -22,6 +22,7 @@ import org.ea.sqrl.activites.EnableQuickPassActivity;
 import org.ea.sqrl.processors.CommunicationFlowHandler;
 import org.ea.sqrl.processors.SQRLStorage;
 import org.ea.sqrl.utils.SqrlApplication;
+import org.ea.sqrl.utils.Utils;
 
 import java.util.Map;
 
@@ -72,17 +73,17 @@ public class LoginBaseActivity extends BaseActivity {
         }
     }
 
-    public void showLoginPopup() {
+    public void showLoginPopupX() {
         loginPopupWindow.showAtLocation(loginPopupWindow.getContentView(), Gravity.CENTER, 0, 0);
         lockRotation();
     }
 
-    public void hideLoginPopup() {
+    public void hideLoginPopupX() {
         loginPopupWindow.dismiss();
         unlockRotation();
     }
 
-    public void setupLoginPopupWindow(LayoutInflater layoutInflater) {
+    public void setupLoginPopupWindowX(LayoutInflater layoutInflater) {
         View popupView = layoutInflater.inflate(R.layout.fragment_login, null);
 
         loginPopupWindow = new PopupWindow(popupView,
@@ -99,7 +100,7 @@ public class LoginBaseActivity extends BaseActivity {
                     ((EnableQuickPassActivity)LoginBaseActivity.this).doingLogin();
                 }
 
-                doLogin(storage, txtLoginPassword, false, false, null, LoginBaseActivity.this);
+                doLoginX(storage, txtLoginPassword, false, false, null, LoginBaseActivity.this);
                 return true;
             }
             return false;
@@ -118,7 +119,7 @@ public class LoginBaseActivity extends BaseActivity {
                         ((EnableQuickPassActivity)LoginBaseActivity.this).doingLogin();
                     }
 
-                    doLogin(storage, txtLoginPassword, true, false, null, LoginBaseActivity.this);
+                    doLoginX(storage, txtLoginPassword, true, false, null, LoginBaseActivity.this);
                 }
             }
 
@@ -127,9 +128,9 @@ public class LoginBaseActivity extends BaseActivity {
             }
         });
 
-        popupView.findViewById(R.id.btnCloseLogin).setOnClickListener(v -> hideLoginPopup());
+        popupView.findViewById(R.id.btnCloseLogin).setOnClickListener(v -> hideLoginPopupX());
         popupView.findViewById(R.id.btnLoginOptions).setOnClickListener(v -> {
-            hideLoginPopup();
+            hideLoginPopupX();
             startActivity(new Intent(this, AccountOptionsActivity.class));
         });
 
@@ -140,13 +141,13 @@ public class LoginBaseActivity extends BaseActivity {
                 if(LoginBaseActivity.this instanceof EnableQuickPassActivity) {
                     ((EnableQuickPassActivity)LoginBaseActivity.this).doingLogin();
                 }
-                doLogin(storage, txtLoginPassword, false, false, null, this);
+                doLoginX(storage, txtLoginPassword, false, false, null, this);
             }
         });
     }
 
-    public void doLogin(SQRLStorage storage, EditText txtLoginPassword, boolean usedQuickpass, boolean usedCps, Activity activityToFinish, Context context) {
-        if (!usedCps) hideLoginPopup();
+    public void doLoginX(SQRLStorage storage, EditText txtLoginPassword, boolean usedQuickpass, boolean usedCps, Activity activityToFinish, Context context) {
+        if (!usedCps) hideLoginPopupX();
         showProgressPopup();
         closeKeyboard();
 
@@ -155,7 +156,7 @@ public class LoginBaseActivity extends BaseActivity {
             if(!decryptionOk) {
                 showErrorMessage(R.string.decrypt_identity_fail, () -> {
                     if (!usedCps) {
-                        showLoginPopup();
+                        showLoginPopupX();
                     }
                 });
                 handler.post(() -> {
@@ -170,7 +171,7 @@ public class LoginBaseActivity extends BaseActivity {
                 }
                 return;
             }
-            clearQuickPassDelayed();
+            Utils.clearQuickPassDelayed(LoginBaseActivity.this);
 
             handler.post(() -> txtLoginPassword.setText(""));
 

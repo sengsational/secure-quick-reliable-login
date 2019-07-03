@@ -8,6 +8,7 @@ import org.ea.sqrl.R;
 import org.ea.sqrl.activites.base.BaseActivity;
 import org.ea.sqrl.processors.CommunicationFlowHandler;
 import org.ea.sqrl.processors.SQRLStorage;
+import org.ea.sqrl.utils.Utils;
 
 public class DisableAccountActivity extends BaseActivity {
     protected CommunicationFlowHandler communicationFlowHandler = CommunicationFlowHandler.getInstance(this, handler);
@@ -31,7 +32,7 @@ public class DisableAccountActivity extends BaseActivity {
             new Thread(() -> {
                 boolean decryptionOk = storage.decryptIdentityKey(txtDisablePassword.getText().toString(), entropyHarvester, false);
                 if(decryptionOk) {
-                    clearQuickPassDelayed();
+                    Utils.clearQuickPassDelayed(DisableAccountActivity.this);
                 } else {
                     showErrorMessage(R.string.decrypt_identity_fail);
                     storage.clearQuickPass();

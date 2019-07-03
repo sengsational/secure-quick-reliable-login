@@ -186,6 +186,7 @@
         <activity android:name=".activites.EnableQuickPassActivity"
             android:label="@string/quickpass_enable_message"
             />
+        <activity android:name=".activites.LoginActivity" />
 
         <provider
             android:name="android.support.v4.content.FileProvider"

@@ -160,4 +160,19 @@ public class SqrlApplication extends Application {
             }
         }
     }
+
+    public static boolean hasQuickPass(Context context) {
+        return SQRLStorage.getInstance(context.getApplicationContext()).hasQuickPass();
+    }
+
+    public static int getHintLength(Context context) {
+        return SQRLStorage.getInstance(context.getApplicationContext()).getHintLength();
+    }
+
+    public static boolean hasBiometric(Context context) {
+        return SQRLStorage.getInstance(context.getApplicationContext()).hasBiometric();
+    }
+
+
+
 }

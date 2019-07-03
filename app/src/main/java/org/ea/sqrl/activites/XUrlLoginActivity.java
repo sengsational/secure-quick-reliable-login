@@ -1,8 +1,8 @@
 package org.ea.sqrl.activites;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.hardware.biometrics.BiometricPrompt;
 import android.net.Uri;
 import android.os.Build;
@@ -24,6 +24,7 @@ import org.ea.sqrl.processors.CommunicationHandler;
 import org.ea.sqrl.processors.SQRLStorage;
 import org.ea.sqrl.utils.IdentitySelector;
 import org.ea.sqrl.utils.SqrlApplication;
+import org.ea.sqrl.utils.Utils;
 
 import java.security.KeyStore;
 import java.util.regex.Matcher;
@@ -34,7 +35,7 @@ import javax.crypto.Cipher;
  *
  * @author Daniel Persson
  */
-public class UrlLoginActivity extends LoginBaseActivity {
+public class XUrlLoginActivity extends LoginBaseActivity {
     private static final String TAG = "UrlLoginActivity";
 
     private EditText txtLoginPassword;
@@ -88,7 +89,7 @@ public class UrlLoginActivity extends LoginBaseActivity {
         setupBasePopups(getLayoutInflater(), true);
         setupErrorPopupWindow(getLayoutInflater());
 
-        SQRLStorage storage = SQRLStorage.getInstance(UrlLoginActivity.this.getApplicationContext());
+        SQRLStorage storage = SQRLStorage.getInstance(XUrlLoginActivity.this.getApplicationContext());
 
         txtLoginPassword = findViewById(R.id.txtLoginPassword);
         if(storage.hasQuickPass()) {
@@ -99,7 +100,7 @@ public class UrlLoginActivity extends LoginBaseActivity {
 
         txtLoginPassword.setOnEditorActionListener((v, actionId, event) -> {
             if(actionId == EditorInfo.IME_ACTION_DONE){
-                doLogin(storage, txtLoginPassword, false, true, null,UrlLoginActivity.this);
+                doLogin(storage, txtLoginPassword, false, true, null,XUrlLoginActivity.this);
                 return true;
             }
             return false;
@@ -114,7 +115,7 @@ public class UrlLoginActivity extends LoginBaseActivity {
             public void onTextChanged(CharSequence password, int start, int before, int count) {
                 if (!storage.hasQuickPass()) return;
                 if ((start + count) >= storage.getHintLength()) {
-                    doLogin(storage, txtLoginPassword, true, true, null, UrlLoginActivity.this);
+                    doLogin(storage, txtLoginPassword, true, true, null, XUrlLoginActivity.this);
                 }
             }
 
@@ -124,7 +125,7 @@ public class UrlLoginActivity extends LoginBaseActivity {
         });
 
         findViewById(R.id.btnLoginOptions).setOnClickListener(v -> {
-            UrlLoginActivity.this.finish();
+            XUrlLoginActivity.this.finish();
             startActivity(new Intent(this, AccountOptionsActivity.class));
         });
 
@@ -138,7 +139,7 @@ public class UrlLoginActivity extends LoginBaseActivity {
 
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && storage.hasBiometric()) {
             BioAuthenticationCallback biometricCallback =
-                    new BioAuthenticationCallback(UrlLoginActivity.this.getApplicationContext(), () -> {
+                    new BioAuthenticationCallback(XUrlLoginActivity.this.getApplicationContext(), () -> {
                         handler.post(() -> showProgressPopup());
                         communicationFlowHandler.addAction(CommunicationFlowHandler.Action.QUERY_WITHOUT_SUK);
                         communicationFlowHandler.addAction(CommunicationFlowHandler.Action.LOGIN_CPS);
@@ -197,9 +198,9 @@ public class UrlLoginActivity extends LoginBaseActivity {
 
     @Override
     protected void closeActivity() {
-        UrlLoginActivity.this.finishAffinity();
+        XUrlLoginActivity.this.finishAffinity();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            UrlLoginActivity.this.finishAndRemoveTask();
+            XUrlLoginActivity.this.finishAndRemoveTask();
         }
     }
 
@@ -231,4 +232,72 @@ public class UrlLoginActivity extends LoginBaseActivity {
             hideProgressPopup();
         }
     }
+
+    public void doLogin(SQRLStorage storage, EditText txtLoginPassword, boolean usedQuickpass, boolean usedCps, Activity activityToFinish, Context context) {
+        if (!usedCps) hideLoginPopupX();
+        showProgressPopup();
+        closeKeyboard();
+
+        new Thread(() -> {
+            boolean decryptionOk = storage.decryptIdentityKey(txtLoginPassword.getText().toString(), entropyHarvester, usedQuickpass);
+            if(!decryptionOk) {
+                showErrorMessage(R.string.decrypt_identity_fail, () -> {
+                    if (!usedCps) {
+                        showLoginPopupX();
+                    }
+                });
+                handler.post(() -> {
+                    txtLoginPassword.setHint(R.string.login_identity_password);
+                    txtLoginPassword.setText("");
+                    hideProgressPopup();
+                });
+                storage.clear();
+                storage.clearQuickPass();
+                Log.v("sengsational", "NNNNNNNNNN NEED TO FIX THIS");
+                //if(UrlLoginActivity.this instanceof EnableQuickPassActivity) {
+                //    ((EnableQuickPassActivity)UrlLoginActivity.this).failedLogin();
+                //}
+                return;
+            }
+            Utils.clearQuickPassDelayed(XUrlLoginActivity.this);
+
+            handler.post(() -> txtLoginPassword.setText(""));
+
+            if (context instanceof EnableQuickPassActivity) {
+                storage.clear();
+                handler.post(() -> {
+                    hideProgressPopup();
+                    closeActivity();
+                    EnableQuickPassActivity enableQuickPassActivity = (EnableQuickPassActivity)context;
+                    enableQuickPassActivity.finish();
+                });
+                return;
+            }
+
+            if (usedCps) {
+                communicationFlowHandler.addAction(CommunicationFlowHandler.Action.QUERY_WITHOUT_SUK);
+                communicationFlowHandler.addAction(CommunicationFlowHandler.Action.LOGIN_CPS);
+            } else {
+                communicationFlowHandler.addAction(CommunicationFlowHandler.Action.QUERY_WITHOUT_SUK_QRCODE);
+                communicationFlowHandler.addAction(CommunicationFlowHandler.Action.LOGIN);
+            }
+
+            communicationFlowHandler.setDoneAction(() -> {
+                storage.clear();
+                handler.post(() -> {
+                    hideProgressPopup();
+                    closeActivity();
+                });
+                if (activityToFinish != null) activityToFinish.finish();
+            });
+
+            communicationFlowHandler.setErrorAction(() -> {
+                storage.clear();
+                handler.post(() -> hideProgressPopup());
+            });
+
+            communicationFlowHandler.handleNextAction();
+        }).start();
+    }
+
 }

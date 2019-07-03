@@ -1,6 +1,7 @@
 package org.ea.sqrl.processors;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
 import android.util.Log;
@@ -27,6 +28,9 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+
+import static org.ea.sqrl.processors.CommunicationHandler.sqrlPattern;
 
 public class CommunicationFlowHandler {
     private static final String TAG = "CommFlowHandler";
@@ -546,4 +550,30 @@ public class CommunicationFlowHandler {
     public void setNoCPSServer() {
         this.cpsServerStarted = true;
     }
+
+    public String setServerParameters(String serverData) {
+
+        setServerData(serverData);
+        setUseSSL(serverData.startsWith("sqrl://"));
+
+        Matcher sqrlMatcher = sqrlPattern.matcher(serverData);
+        if(!sqrlMatcher.matches()) {
+            return currentActivity.getResources().getString(R.string.scan_incorrect);
+        }
+
+        /* The "result" matched sqrlPattern.  Extract domain and queryLink. */
+
+        final String domain = sqrlMatcher.group(1);
+        final String queryLink = sqrlMatcher.group(2);
+
+        try {
+            setQueryLink(queryLink);
+            setDomain(domain, queryLink);
+        } catch (Exception e) {
+            Log.e(TAG, e.getMessage(), e);
+            return e.getMessage();
+        }
+        return null;
+    }
+
 }

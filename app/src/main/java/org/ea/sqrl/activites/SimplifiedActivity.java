@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.os.CancellationSignal;
 import android.support.design.widget.Snackbar;
 import android.util.Log;
+import android.view.View;
 import android.widget.TextView;
 
 import com.google.zxing.FormatException;
@@ -18,7 +19,6 @@ import org.ea.sqrl.activites.base.LoginBaseActivity;
 import org.ea.sqrl.activites.identity.ImportActivity;
 import org.ea.sqrl.processors.BioAuthenticationCallback;
 import org.ea.sqrl.processors.CommunicationFlowHandler;
-import org.ea.sqrl.processors.CommunicationHandler;
 import org.ea.sqrl.processors.SQRLStorage;
 import org.ea.sqrl.utils.IdentitySelector;
 import org.ea.sqrl.utils.SqrlApplication;
@@ -26,7 +26,6 @@ import org.ea.sqrl.utils.Utils;
 
 import java.security.KeyStore;
 import java.util.Arrays;
-import java.util.regex.Matcher;
 
 import javax.crypto.Cipher;
 
@@ -50,7 +49,7 @@ public class SimplifiedActivity extends LoginBaseActivity {
         rootView = findViewById(R.id.simplifiedActivityView);
         communicationFlowHandler = CommunicationFlowHandler.getInstance(this, handler);
 
-        setupLoginPopupWindow(getLayoutInflater());
+        //setupLoginPopupWindow(getLayoutInflater());
         setupErrorPopupWindow(getLayoutInflater());
         setupBasePopups(getLayoutInflater(), false);
 
@@ -96,6 +95,7 @@ public class SimplifiedActivity extends LoginBaseActivity {
                     startActivity(new Intent(this, StartActivity.class));
                 }
             } else {
+                /** The "result" of the scan contains data.  We now need to make sure it's legit. */
                 byte[] qrCodeData = null;
 
                 try {
@@ -110,11 +110,12 @@ public class SimplifiedActivity extends LoginBaseActivity {
                     return;
                 }
 
+                /** The "result" contains legit data.  It might be an identity or a site */
+
                 // If an identity qr-code was scanned instead of a login qr code,
                 // simply forward it to the import activity and bail out
 
-                if (qrCodeData.length > 8 && new String(Arrays.copyOfRange(qrCodeData, 0, 8))
-                        .startsWith(SQRLStorage.STORAGE_HEADER)) {
+                if (qrCodeData.length > 8 && new String(Arrays.copyOfRange(qrCodeData, 0, 8)).startsWith(SQRLStorage.STORAGE_HEADER)) {
 
                     Intent importIntent = new Intent(this, ImportActivity.class);
                     importIntent.putExtra(ImportActivity.EXTRA_IMPORT_METHOD, ImportActivity.IMPORT_METHOD_FORWARDED_QR_CODE);
@@ -123,44 +124,46 @@ public class SimplifiedActivity extends LoginBaseActivity {
                     return;
                 }
 
+                /** The "result" was not an identity.  Maybe it's a site.  */
+
                 final String serverData = new String(qrCodeData);
 
-                communicationFlowHandler.setServerData(serverData);
-                communicationFlowHandler.setUseSSL(serverData.startsWith("sqrl://"));
+                String errorResult = communicationFlowHandler.setServerParameters(serverData);
 
-                Matcher sqrlMatcher = CommunicationHandler.sqrlPattern.matcher(serverData);
-                if(!sqrlMatcher.matches()) {
-                    showErrorMessage(R.string.scan_incorrect);
+                if (errorResult != null) {
+                    showErrorMessage(errorResult);
                     return;
                 }
 
-                final String domain = sqrlMatcher.group(1);
-                final String queryLink = sqrlMatcher.group(2);
+                /** The "serverData" appeared to be a legit login.  Call appropriate intent. */
 
-                try {
-                    communicationFlowHandler.setQueryLink(queryLink);
-                    communicationFlowHandler.setDomain(domain, queryLink);
-                } catch (Exception e) {
-                    showErrorMessage(e.getMessage());
-                    Log.e(TAG, e.getMessage(), e);
+                if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && SQRLStorage.getInstance(SimplifiedActivity.this.getApplicationContext()).hasBiometric()) {
+                    Intent biometricIntent = new Intent(Intent.ACTION_VIEW);
+                    biometricIntent.putExtra("LOGIN_SITE_DOMAIN", communicationFlowHandler.getDomain());
+                    startActivity(biometricIntent);
+                    return;
+                } else {
+                    Intent loginIntent = new Intent(this, LoginActivity.class);
+                    loginIntent.putExtra("LOGIN_SITE_DOMAIN", communicationFlowHandler.getDomain());
+                    startActivity(loginIntent);
                     return;
                 }
 
+                /*
                 handler.postDelayed(() -> {
                     final TextView txtSite = loginPopupWindow.getContentView().findViewById(R.id.txtSite);
                     txtSite.setText(domain);
 
-                    SQRLStorage storage = SQRLStorage.getInstance(SimplifiedActivity.this.getApplicationContext());
                     final TextView txtLoginPassword = loginPopupWindow.getContentView().findViewById(R.id.txtLoginPassword);
-                    if(storage.hasQuickPass()) {
-                        txtLoginPassword.setHint(getString(R.string.login_identity_quickpass, "" + storage.getHintLength()));
+                    if(SqrlApplication.hasQuickPass(this)) {
+                        txtLoginPassword.setHint(getString(R.string.login_identity_quickpass, "" + SqrlApplication.getHintLength(this)));
                     } else {
                         txtLoginPassword.setHint(R.string.login_identity_password);
                     }
 
                     showLoginPopup();
 
-                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && storage.hasBiometric()) {
+                    if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && SqrlApplication.hasBiometric(this)) {
 
                         BioAuthenticationCallback biometricCallback =
                                 new BioAuthenticationCallback(SimplifiedActivity.this.getApplicationContext(), () -> {
@@ -212,10 +215,17 @@ public class SimplifiedActivity extends LoginBaseActivity {
                         }
                     }
 
-                }, 100);
+                }, 100); */
             }
         }
     }
+
+    public void onClickLoginAsync(View view) {
+        Log.v(TAG, "Clicked the new button");
+        Intent intent = new Intent(SimplifiedActivity.this, LoginActivity.class);
+        startActivityForResult(intent, 42);
+    }
+
 
     private void initiateScan() {
         final IntentIntegrator integrator = new IntentIntegrator(this);

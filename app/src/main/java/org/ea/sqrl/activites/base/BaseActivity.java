@@ -393,33 +393,4 @@ public class BaseActivity extends CommonBaseActivity {
         }
     }
 
-    public void clearQuickPassDelayed() {
-        long delayMillis = SQRLStorage.getInstance(BaseActivity.this.getApplicationContext()).getIdleTimeout() * 60000;
-
-        SqrlApplication.setApplicationShortcuts(getApplicationContext());
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            JobInfo jobInfo = new JobInfo.Builder(ClearIdentityService.JOB_NUMBER, new ComponentName(this, ClearIdentityService.class))
-                    .setMinimumLatency(delayMillis).build();
-
-            JobScheduler jobScheduler = (JobScheduler) getSystemService(Context.JOB_SCHEDULER_SERVICE);
-            if(jobScheduler != null) jobScheduler.schedule(jobInfo);
-        } else {
-            AlarmManager alarmManager = (AlarmManager)getSystemService(ALARM_SERVICE);
-
-            Intent intent = new Intent(getApplicationContext(), ClearIdentityReceiver.class);
-            PendingIntent pendingIntent = PendingIntent.getBroadcast(getApplicationContext(), 0, intent, 0);
-
-            int SDK_INT = Build.VERSION.SDK_INT;
-            long timeInMillis = System.currentTimeMillis() + delayMillis;
-
-            if(alarmManager == null) return;
-
-            if (SDK_INT < Build.VERSION_CODES.KITKAT) {
-                alarmManager.set(AlarmManager.RTC_WAKEUP, timeInMillis, pendingIntent);
-            } else if (SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, timeInMillis, pendingIntent);
-            }
-        }
-    }
 }

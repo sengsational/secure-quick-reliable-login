@@ -1,6 +1,7 @@
 package org.ea.sqrl.activites;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -48,9 +49,10 @@ public class EnableQuickPassActivity extends LoginBaseActivity {
                     finishAffinity();
                 } else if (!storage.hasQuickPass()) {
                     final ViewGroup viewGroup = (ViewGroup) ((ViewGroup) this.findViewById(android.R.id.content)).getChildAt(0);
-                    setupLoginPopupWindow(getLayoutInflater());
-                    PopupWindow loginOnlyPopupWindow = alterDialogOfLoginPopupWindow(loginPopupWindow);
-                    loginOnlyPopupWindow.showAtLocation(viewGroup, Gravity.CENTER, 0, 0);
+                    Log.v("sengsational", "NNNNNNNNNNNNNNN Need to fix this");
+                    //setupLoginPopupWindow(getLayoutInflater());
+                    //PopupWindow loginOnlyPopupWindow = alterDialogOfLoginPopupWindow(loginPopupWindow);
+                    //loginOnlyPopupWindow.showAtLocation(viewGroup, Gravity.CENTER, 0, 0);
                     mPopupShown = true;
                 } else {
                     Toast.makeText(this, R.string.quickpass_already_active, Toast.LENGTH_LONG).show(); // unexpected
