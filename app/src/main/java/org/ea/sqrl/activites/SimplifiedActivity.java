@@ -1,5 +1,7 @@
 package org.ea.sqrl.activites;
 
+import android.app.UiModeManager;
+import android.content.Context;
 import android.content.Intent;
 import android.hardware.biometrics.BiometricPrompt;
 import android.os.Build;
@@ -30,6 +32,8 @@ import java.util.regex.Matcher;
 
 import javax.crypto.Cipher;
 
+import static org.ea.sqrl.utils.SqrlApplication.toggleNightModes;
+
 /**
  *
  * @author Daniel Persson
@@ -41,6 +45,8 @@ public class SimplifiedActivity extends LoginBaseActivity {
     public static final String ACTION_LOGON = "org.ea.sqrl.activites.LOGON";
 
     private IdentitySelector mIdentitySelector = null;
+    private int multiTapCounter = 0;
+    private long lastTapTime = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,6 +69,21 @@ public class SimplifiedActivity extends LoginBaseActivity {
         if (ACTION_QUICK_SCAN.equals(getIntent().getAction())) {
             handler.postDelayed(() -> initiateScan(), 100L);
         }
+
+        /**
+         * Allows application testing in various night modes; testers are able to tap rapidly and repeatedly to change the night mode.
+         * There should be little risk of regular users firing this toggle.
+         */
+        rootView.setOnClickListener(view -> {
+            long currentEventTime = System.currentTimeMillis();
+            if (currentEventTime - lastTapTime < 300) multiTapCounter++; else multiTapCounter = 0;
+            if (multiTapCounter > 15) {
+                toggleNightModes((UiModeManager)getSystemService(Context.UI_MODE_SERVICE), true, false, getApplicationContext());
+                lastTapTime = 0;
+            } else {
+                lastTapTime = currentEventTime;
+            }
+        });
     }
 
     @Override

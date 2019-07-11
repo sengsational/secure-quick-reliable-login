@@ -1,14 +1,17 @@
 package org.ea.sqrl.utils;
 
 import android.app.Application;
+import android.app.UiModeManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
+import android.content.res.Configuration;
 import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.util.Log;
+import android.widget.Toast;
 
 import org.ea.sqrl.R;
 import org.ea.sqrl.activites.SimplifiedActivity;
@@ -20,6 +23,10 @@ import org.ea.sqrl.processors.SQRLStorage;
 
 import java.util.Arrays;
 import java.util.Map;
+
+import static android.support.v7.app.AppCompatDelegate.MODE_NIGHT_AUTO;
+import static android.support.v7.app.AppCompatDelegate.MODE_NIGHT_NO;
+import static android.support.v7.app.AppCompatDelegate.MODE_NIGHT_YES;
 
 
 public class SqrlApplication extends Application {
@@ -45,6 +52,8 @@ public class SqrlApplication extends Application {
         } catch (Exception e) {
             Log.e(TAG, "Failed to get initiate EntropyHarvester or SQRLStorage.");
         }
+
+        toggleNightModes((UiModeManager)getSystemService(Context.UI_MODE_SERVICE), false, true, getApplicationContext());
     }
 
     public static void setApplicationShortcuts(Context context) {
@@ -158,6 +167,40 @@ public class SqrlApplication extends Application {
             } catch (Exception e) {
                 Log.e(TAG, e.getMessage(), e);
             }
+        }
+    }
+
+    /**
+     * 1) Configures night mode display upon app on startup: sets the mode to automatic
+     * so that the night display modes will be effective.
+     *
+     * 2) Allows for developer testing the night UI modes. Each time this method is called it
+     * progresses to the next night modes: MODE_NIGHT_AUTO > MODE_NIGHT_YES > MODE_NIGHT_NO
+     *
+     * @param uiModeManager             A system resource.
+     * @param notifyUser                boolean to create toast messages for the user.
+     * @param forceAutomaticNightMode   Set to true on startup to default to automatic night mode.
+     * @param context                   A system resource to allow toast messages.
+     */
+
+    public static void toggleNightModes(UiModeManager uiModeManager, boolean notifyUser, boolean forceAutomaticNightMode, Context context) {
+        boolean carModeWasOff = uiModeManager.getCurrentModeType() == Configuration.UI_MODE_TYPE_CAR;
+        int currentNightMode = uiModeManager.getNightMode();
+        if (MODE_NIGHT_NO == currentNightMode || currentNightMode < 0 || forceAutomaticNightMode) {
+            if (notifyUser) Toast.makeText(context, "Setting night mode 'auto'", Toast.LENGTH_SHORT).show();
+            uiModeManager.enableCarMode(0);
+            uiModeManager.setNightMode(UiModeManager.MODE_NIGHT_AUTO);
+            if (carModeWasOff) uiModeManager.disableCarMode(0);
+        } else if (MODE_NIGHT_AUTO == currentNightMode){
+            if (notifyUser) Toast.makeText(context, "Setting night mode 'yes'", Toast.LENGTH_SHORT).show();
+            uiModeManager.enableCarMode(0);
+            uiModeManager.setNightMode(UiModeManager.MODE_NIGHT_YES);
+            if (carModeWasOff) uiModeManager.disableCarMode(0);
+        } else if (MODE_NIGHT_YES == currentNightMode) {
+            if (notifyUser) Toast.makeText(context, "Setting night mode 'no'", Toast.LENGTH_SHORT).show();
+            uiModeManager.setNightMode(UiModeManager.MODE_NIGHT_NO);
+        } else {
+            if (notifyUser) Toast.makeText(context, "Not setting night mode.  Unexpected '" + currentNightMode + "'", Toast.LENGTH_SHORT).show();
         }
     }
 }
