@@ -10,6 +10,7 @@ import android.content.pm.ShortcutManager;
 import android.content.res.Configuration;
 import android.graphics.drawable.Icon;
 import android.os.Build;
+import android.support.v7.app.AppCompatDelegate;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -184,7 +185,7 @@ public class SqrlApplication extends Application {
      */
 
     public static void toggleNightModes(UiModeManager uiModeManager, boolean notifyUser, boolean forceAutomaticNightMode, Context context) {
-        boolean carModeWasOff = uiModeManager.getCurrentModeType() == Configuration.UI_MODE_TYPE_CAR;
+        boolean carModeWasOff = uiModeManager.getCurrentModeType() != Configuration.UI_MODE_TYPE_CAR;
         int currentNightMode = uiModeManager.getNightMode();
         if (MODE_NIGHT_NO == currentNightMode || currentNightMode < 0 || forceAutomaticNightMode) {
             if (notifyUser) Toast.makeText(context, "Setting night mode 'auto'", Toast.LENGTH_SHORT).show();
